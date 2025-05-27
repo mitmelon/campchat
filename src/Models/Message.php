@@ -123,34 +123,33 @@ class Message {
         }
     }
 
-    public function getHistory(string $senderId, string $recipientId): array {
-        $cacheKey = "messages:$senderId:$recipientId";
+    public function getHistory(string $senderId, string $recipientId, int $limit = 100, int $skip = 0): array {
+        $cacheKey = "messages:$senderId:$recipientId:$limit:$skip";
         if ($this->redis) {
             try {
-                $cached = $this->redis->lRange($cacheKey, 0, -1);
+                $cached = $this->redis->get($cacheKey);
                 if ($cached) {
                     $this->logger->info("Cache hit for messages between $senderId and $recipientId");
-                    return array_map('json_decode', $cached, array_fill(0, count($cached), true));
+                    return json_decode($cached, true);
                 }
             } catch (\Exception $e) {
                 $this->logger->warning("Redis cache error for messages: {$e->getMessage()}");
             }
         }
 
-        $messages = $this->collection->find([
-            '$or' => [
-                ['sender_id' => $senderId, 'recipient_id' => $recipientId],
-                ['sender_id' => $recipientId, 'recipient_id' => $senderId]
-            ]
-        ])->toArray();
+        $messages = $this->collection->find(
+            [
+                '$or' => [
+                    ['sender_id' => $senderId, 'recipient_id' => $recipientId],
+                    ['sender_id' => $recipientId, 'recipient_id' => $senderId]
+                ]
+            ],
+            ['sort' => ['created_at' => -1], 'limit' => $limit, 'skip' => $skip]
+        )->toArray();
 
         if ($this->redis && $messages) {
             try {
-                foreach ($messages as $message) {
-                    $this->redis->lPush($cacheKey, json_encode($message));
-                }
-                $this->redis->lTrim($cacheKey, 0, 99);
-                $this->redis->expire($cacheKey, 3600);
+                $this->redis->setex($cacheKey, 3600, json_encode($messages));
                 $this->logger->info("Cached messages between $senderId and $recipientId");
             } catch (\Exception $e) {
                 $this->logger->warning("Failed to cache messages: {$e->getMessage()}");
@@ -160,29 +159,28 @@ class Message {
         return $messages;
     }
 
-    public function getGroupHistory(string $groupId): array {
-        $cacheKey = "group_messages:$groupId";
+    public function getGroupHistory(string $groupId, int $limit = 100, int $skip = 0): array {
+        $cacheKey = "group_messages:$groupId:$limit:$skip";
         if ($this->redis) {
             try {
-                $cached = $this->redis->lRange($cacheKey, 0, -1);
+                $cached = $this->redis->get($cacheKey);
                 if ($cached) {
                     $this->logger->info("Cache hit for group messages $groupId");
-                    return array_map('json_decode', $cached, array_fill(0, count($cached), true));
+                    return json_decode($cached, true);
                 }
             } catch (\Exception $e) {
                 $this->logger->warning("Redis cache error for group messages $groupId: {$e->getMessage()}");
             }
         }
 
-        $messages = $this->collection->find(['group_id' => $groupId])->toArray();
+        $messages = $this->collection->find(
+            ['group_id' => $groupId],
+            ['sort' => ['created_at' => -1], 'limit' => $limit, 'skip' => $skip]
+        )->toArray();
 
         if ($this->redis && $messages) {
             try {
-                foreach ($messages as $message) {
-                    $this->redis->lPush($cacheKey, json_encode($message));
-                }
-                $this->redis->lTrim($cacheKey, 0, 99);
-                $this->redis->expire($cacheKey, 3600);
+                $this->redis->setex($cacheKey, 3600, json_encode($messages));
                 $this->logger->info("Cached group messages for $groupId");
             } catch (\Exception $e) {
                 $this->logger->warning("Failed to cache group messages for $groupId: {$e->getMessage()}");
@@ -197,9 +195,10 @@ class Message {
         $updates = [];
 
         while ((microtime(true) - $start) < $timeout) {
-            $newMessages = $this->collection->find([
-                'created_at' => ['$gt' => new \DateTime("@$offset")]
-            ], ['limit' => $limit])->toArray();
+            $newMessages = $this->collection->find(
+                ['created_at' => ['$gt' => new \DateTime("@$offset")]],
+                ['limit' => $limit]
+            )->toArray();
 
             if ($newMessages) {
                 foreach ($newMessages as $message) {
@@ -218,6 +217,7 @@ class Message {
                             'caption' => $message['caption'] ?? null,
                             'entities' => $message['entities'] ?? null,
                             'forwarded_from' => $message['forwarded_from'] ?? null,
+                            'reply_to_message_id' => $message['reply_to_message_id'] ?? null,
                             'reactions' => $message['reactions'] ?? [],
                             'created_at' => $message['created_at']->format('c')
                         ]

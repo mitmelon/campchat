@@ -4,7 +4,8 @@ use Psr\Http\Message\ServerRequestInterface as Request;
 use CampChat\Controllers\{
     UserController,
     MessageController,
-    GroupController
+    GroupController,
+    BotController
 };
 
 $app->get('/', function (Request $request, Response $response) {
@@ -20,7 +21,7 @@ $app->get('/health', function (Request $request, Response $response) {
 // User routes
 $app->group('/users', function ($group) {
     $controller = new UserController();
-    $group->post('', [$controller, 'create']);
+    $group->post('/create', [$controller, 'create']);
     $group->get('/{id}', [$controller, 'get']);
     $group->put('/{id}', [$controller, 'update']);
     $group->delete('/{id}', [$controller, 'delete']);
@@ -28,15 +29,17 @@ $app->group('/users', function ($group) {
 });
 
 $app->group('/messages', function ($group) {
-    $group->post('/{type:(?:text|photo|video|audio|document|animation|voice|location|contact)}', [MessageController::class, 'send']);
-    $group->put('/{messageId}', [MessageController::class, 'edit']);
-    $group->delete('/{messageId}', [MessageController::class, 'delete']);
+    $group->post('/send/{type:(?:text|photo|video|audio|document|animation|voice|location|contact)}', [MessageController::class, 'send']);
+    $group->post('/edit/{messageId}', [MessageController::class, 'edit']);
+    $group->post('/delete/{messageId}', [MessageController::class, 'delete']);
     $group->post('/forward', [MessageController::class, 'forward']);
     $group->post('/reaction', [MessageController::class, 'setReaction']);
-    $group->get('/{recipientId}', [MessageController::class, 'getHistory']);
+    $group->get('/history/{recipientId}', [MessageController::class, 'getHistory']);
+    $group->get('/group/{groupId}', [MessageController::class, 'getGroupMessages']);
+    $group->post('/pin/{groupId}', [MessageController::class, 'pinMessage']);
+    $group->post('/unpin/{groupId}', [MessageController::class, 'unpinMessage']);
     $group->get('/updates', [MessageController::class, 'getUpdates']);
 });
-
 
 $app->group('/group', function ($group) {
     $group->post('/create', [GroupController::class, 'create']);
@@ -48,6 +51,12 @@ $app->group('/group', function ($group) {
     $group->put('/{groupId}/permissions', [GroupController::class, 'updatePermissions']);
     $group->put('/{groupId}/details', [GroupController::class, 'updateDetails']);
     $group->delete('/{groupId}', [GroupController::class, 'delete']);
+});
+
+$app->group('/bots', function ($group) {
+    $group->post('', [BotController::class, 'create']);
+    $group->put('/{botId}/commands', [BotController::class, 'updateCommands']);
+    $group->put('/{botId}/webhook', [BotController::class, 'setWebhook']);
 });
 
 // Catch-all route for undefined endpoints

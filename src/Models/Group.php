@@ -5,6 +5,7 @@ use CampChat\Config\Config;
 use MongoDB\BSON\ObjectId;
 use Monolog\Logger;
 use Monolog\Handler\StreamHandler;
+use PhpAmqpLib\Message\AMQPMessage;
 
 class Group {
     private $collection;
@@ -44,6 +45,8 @@ class Group {
         ];
         $group['description'] = $group['description'] ?? '';
         $group['icon_url'] = $group['icon_url'] ?? null;
+        $group['pinned_message_id'] = null;
+        $group['bots'] = []; // Initialize bots array
         $result = $this->collection->insertOne($group);
         $groupId = (string)$result->getInsertedId();
 
@@ -93,6 +96,7 @@ class Group {
             ['$addToSet' => ['members' => $userId]]
         );
         $this->clearCache($groupId);
+        $this->queueBotEvent($groupId, 'member_joined', $userId);
     }
 
     public function removeMember(string $groupId, string $userId, string $adminId): void {
@@ -108,6 +112,7 @@ class Group {
             ['$pull' => ['members' => $userId, 'admins' => $userId]]
         );
         $this->clearCache($groupId);
+        $this->queueBotEvent($groupId, 'member_left', $userId);
     }
 
     public function quitGroup(string $groupId, string $userId): void {
@@ -120,6 +125,7 @@ class Group {
             ['$pull' => ['members' => $userId, 'admins' => $userId]]
         );
         $this->clearCache($groupId);
+        $this->queueBotEvent($groupId, 'member_left', $userId);
     }
 
     public function addAdmin(string $groupId, string $userId, string $adminId): void {
@@ -130,7 +136,6 @@ class Group {
         if (!in_array($userId, $group['members'])) {
             throw new \Exception("User must be a member");
         }
-
         $this->collection->updateOne(
             ['_id' => new ObjectId($groupId)],
             ['$addToSet' => ['admins' => $userId]]
@@ -184,6 +189,85 @@ class Group {
         }
         $this->collection->deleteOne(['_id' => new ObjectId($groupId)]);
         $this->clearCache($groupId);
+    }
+
+    public function pinMessage(string $groupId, string $messageId, string $adminId): void {
+        $group = $this->findById($groupId);
+        if (!in_array($adminId, $group['admins'])) {
+            throw new \Exception("Only admins can pin messages");
+        }
+        $this->collection->updateOne(
+            ['_id' => new ObjectId($groupId)],
+            ['$set' => ['pinned_message_id' => $messageId]]
+        );
+        $this->clearCache($groupId);
+        $this->logger->info("Pinned message $messageId in group $groupId by admin $adminId");
+    }
+
+    public function unpinMessage(string $groupId, string $adminId): void {
+        $group = $this->findById($groupId);
+        if (!in_array($adminId, $group['admins'])) {
+            throw new \Exception("Only admins can unpin messages");
+        }
+        $this->collection->updateOne(
+            ['_id' => new ObjectId($groupId)],
+            ['$set' => ['pinned_message_id' => null]]
+        );
+        $this->clearCache($groupId);
+        $this->logger->info("Unpinned message in group $groupId by admin $adminId");
+    }
+
+    public function addBot(string $groupId, string $botId, string $adminId): void {
+        $group = $this->findById($groupId);
+        if (!in_array($adminId, $group['admins'])) {
+            throw new \Exception("Only admins can add bots");
+        }
+        $this->collection->updateOne(
+            ['_id' => new ObjectId($groupId)],
+            ['$addToSet' => ['bots' => $botId]]
+        );
+        $this->clearCache($groupId);
+        $this->logger->info("Bot $botId added to group $groupId by admin $adminId");
+    }
+
+    public function removeBot(string $groupId, string $botId, string $adminId): void {
+        $group = $this->findById($groupId);
+        if (!in_array($adminId, $group['admins'])) {
+            throw new \Exception("Only admins can remove bots");
+        }
+        $this->collection->updateOne(
+            ['_id' => new ObjectId($groupId)],
+            ['$pull' => ['bots' => $botId]]
+        );
+        $this->clearCache($groupId);
+        $this->logger->info("Bot $botId removed from group $groupId by admin $adminId");
+    }
+
+    private function queueBotEvent(string $groupId, string $event, string $userId): void {
+        $rabbitMQ = Config::getRabbitMQ();
+        if (!$rabbitMQ) {
+            $this->logger->warning("RabbitMQ unavailable, skipping bot event $event for group $groupId");
+            return;
+        }
+
+        try {
+            $channel = $rabbitMQ->channel();
+            $channel->queue_declare('bot_events', false, true, false, false);
+
+            $msg = new AMQPMessage(json_encode([
+                'group_id' => $groupId,
+                'event' => $event,
+                'user_id' => $userId,
+                'timestamp' => time()
+            ]));
+            $channel->basic_publish($msg, '', 'bot_events');
+
+            $this->logger->info("Queued bot event $event for group $groupId");
+            $channel->close();
+            $rabbitMQ->close();
+        } catch (\Exception $e) {
+            $this->logger->warning("Failed to queue bot event $event for group $groupId: {$e->getMessage()}");
+        }
     }
 
     private function clearCache(string $groupId): void {
