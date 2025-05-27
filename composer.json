@@ -1,0 +1,36 @@
+{
+    "name": "your-vendor/campchat",
+    "description": "CampChat: A Telegram-like chat engine with REST API",
+    "type": "project",
+    "require": {
+        "php": ">=8.3",
+        "workerman/workerman": "^4.1",
+        "slim/slim": "^4.11",
+        "slim/psr7": "^1.6",
+        "mongodb/mongodb": "^1.12",
+        "php-amqplib/php-amqplib": "^3.5",
+        "predis/predis": "^2.0",
+        "paragonie/halite": "^5.1",
+        "monolog/monolog": "^2.8",
+        "vlucas/phpdotenv": "^5.5"
+    },
+    "autoload": {
+        "psr-4": {
+            "CampChat\\": "src/"
+        }
+    },
+    "scripts": {
+        "start": "php scripts/server.php start",
+        "start-daemon": "php scripts/server.php start -d",
+        "start-websocket": "php scripts/websocket.php start",
+        "start-websocket-daemon": "php scripts/websocket.php start -d",
+        "stop": "php scripts/server.php stop",
+        "stop-websocket": "php scripts/websocket.php stop",
+        "status": "php scripts/server.php status",
+        "status-websocket": "php scripts/websocket.php status",
+        "post-install-cmd": [
+            "@php -r \"file_exists('public/index.php') || copy('vendor/your-vendor/campchat/templates/index.php', 'public/index.php');\""
+        ]
+    },
+    "minimum-stability": "stable"
+}
