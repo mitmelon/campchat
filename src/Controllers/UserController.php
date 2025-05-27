@@ -4,21 +4,28 @@ namespace CampChat\Controllers;
 use Psr\Http\Message\ResponseInterface as Response;
 use Psr\Http\Message\ServerRequestInterface as Request;
 use CampChat\Models\User;
+use CampChat\Models\Key;
 use CampChat\Models\Analytics;
 use CampChat\Services\EncryptionService;
 use MongoDB\BSON\ObjectId;
 use Exception;
 use Monolog\Logger;
 use Monolog\Handler\StreamHandler;
+use ParagonIE\Halite\KeyFactory;
+use ParagonIE\Halite\Symmetric\Crypto as SymmetricCrypto;
+use ParagonIE\HiddenString\HiddenString;
+use CampChat\Config\Config;
 
 class UserController {
     private $userModel;
+    private $keyModel;
     private $analytics;
     private $encryptionService;
     private $logger;
 
     public function __construct() {
         $this->userModel = new User();
+        $this->keyModel = new Key();
         $this->analytics = new Analytics();
         $this->encryptionService = new EncryptionService();
         $this->logger = new Logger('campchat-user-controller');
@@ -76,6 +83,11 @@ class UserController {
             $passwordHash = $this->encryptionService->hashPassword($data['password']);
             $token = $this->encryptionService->generateToken();
 
+            // Generate and store encryption keys
+            $keyPair = KeyFactory::generateAsymmetricKey();
+            $publicKey = $keyPair->getPublicKey()->getRawKeyMaterial();
+            $privateKey = $keyPair->getSecretKey()->getRawKeyMaterial();
+
             $user = [
                 'phone' => $data['phone'],
                 'username' => $data['username'],
@@ -90,7 +102,22 @@ class UserController {
             ];
 
             $userId = $this->userModel->create($user);
-            $this->analytics->incrementUsers();
+
+            // Encrypt and store keys
+            $globalKey = Config::getGlobalEncryptionKey();
+            $encryptedPublicKey = SymmetricCrypto::encrypt(
+                new HiddenString($publicKey),
+                KeyFactory::importEncryptionKey($globalKey)
+            );
+            $encryptedPrivateKey = SymmetricCrypto::encrypt(
+                new HiddenString($privateKey),
+                KeyFactory::importEncryptionKey($globalKey)
+            );
+
+            $this->keyModel->storeKeys($userId, $encryptedPublicKey, $encryptedPrivateKey);
+            $this->logger->info("Stored encrypted keys for user $userId");
+
+            //$this->analytics->incrementUsers();
 
             // Queue welcome notification
             $this->userModel->queueNotification($userId, "Welcome to CampChat, {$data['first_name']}!");
