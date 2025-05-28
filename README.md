@@ -72,8 +72,8 @@ CampChat is a secure, scalable group chat engine built with PHP, Slim Framework,
     REDIS_PORT=6379
     RABBITMQ_HOST=localhost
     RABBITMQ_PORT=5672
-    RABBITMQ_USER=disnam
-    RABBITMQ_PASS=Godismyhelper11$
+    RABBITMQ_USER=campchat
+    RABBITMQ_PASS=1234567890
     STORAGE_TYPE=local # or aws_s3
     STORAGE_PATH=/path/to/storage
 
@@ -97,7 +97,7 @@ CampChat is a secure, scalable group chat engine built with PHP, Slim Framework,
    
    Use a web server or PHP's built-in server:
    ```bash
-   php -S localhost:8011 -t public
+   composer start or php scripts/server.php start
    ```
 
 6. **Start the Bot Worker**
@@ -249,7 +249,7 @@ Create a group.
 **Status:** 201 on success, 400 on error
 
 #### POST `/groups/{groupId}/members`
-Add a member to a group (requires auth, admin).
+Add a member to a group.
 
 **Body:**
 ```json
@@ -269,7 +269,7 @@ Add a member to a group (requires auth, admin).
 **Status:** 200 on success, 400 on error
 
 #### DELETE `/groups/{groupId}/members`
-Remove a member from a group (requires auth, admin).
+Remove a member from a group.
 
 **Body:**
 ```json
@@ -308,7 +308,7 @@ Quit a group.
 **Status:** 200 on success, 400 on error
 
 #### POST `/groups/{groupId}/admins`
-Promote a member to admin (requires auth, admin).
+Promote a member to admin.
 
 **Body:**
 ```json
@@ -328,7 +328,7 @@ Promote a member to admin (requires auth, admin).
 **Status:** 200 on success, 400 on error
 
 #### DELETE `/groups/{groupId}/admins`
-Demote an admin (requires auth, admin).
+Demote an admin.
 
 **Body:**
 ```json
@@ -348,7 +348,7 @@ Demote an admin (requires auth, admin).
 **Status:** 200 on success, 400 on error
 
 #### PUT `/groups/{groupId}/permissions`
-Update group permissions (requires auth, admin).
+Update group permissions.
 
 **Body:**
 ```json
@@ -371,7 +371,7 @@ Update group permissions (requires auth, admin).
 **Status:** 200 on success, 400 on error
 
 #### PUT `/groups/{groupId}/details`
-Update group details (requires auth, admin).
+Update group details.
 
 **Body:**
 ```json
@@ -391,7 +391,7 @@ Update group details (requires auth, admin).
 **Status:** 200 on success, 400 on error
 
 #### DELETE `/groups/{groupId}`
-Delete a group (requires auth, creator).
+Delete a group.
 
 **Body:**
 ```json
@@ -410,7 +410,7 @@ Delete a group (requires auth, creator).
 **Status:** 200 on success, 400 on error
 
 #### POST `/groups/{groupId}/bots`
-Add a bot to a group (requires auth, admin).
+Add a bot to a group.
 
 **Body:**
 ```json
@@ -430,7 +430,7 @@ Add a bot to a group (requires auth, admin).
 **Status:** 200 on success, 400 on error
 
 #### DELETE `/groups/{groupId}/bots`
-Remove a bot from a group (requires auth, admin).
+Remove a bot from a group.
 
 **Body:**
 ```json
@@ -514,7 +514,7 @@ Send a message. Types: `text`, `photo`, `video`, `audio`, `document`, `animation
 **Status:** 201 on success, 400 on error
 
 #### POST `/messages/edit/{messageId}`
-Edit a message (requires auth, sender).
+Edit a message.
 
 **Body:**
 ```json
@@ -536,7 +536,7 @@ Or form-data with media
 **Status:** 200 on success, 400 on error
 
 #### POST `/messages/delete/{messageId}`
-Delete a message (requires auth, sender).
+Delete a message.
 
 **Response:**
 ```json
@@ -616,7 +616,7 @@ Get private chat history.
 **Status:** 200 on success, 400 on error
 
 #### GET `/messages/group/{groupId}/messages`
-Get group messages (requires auth, member).
+Get group messages.
 
 **Query:** `user_id=string&limit=int&skip=int`
 
@@ -634,7 +634,7 @@ Get group messages (requires auth, member).
 **Status:** 200 on success, 400 on error
 
 #### POST `/messages/pin/{groupId}`
-Pin a message in a group (requires auth, admin).
+Pin a message in a group.
 
 **Body:**
 ```json
@@ -654,7 +654,7 @@ Pin a message in a group (requires auth, admin).
 **Status:** 200 on success, 400 on error
 
 #### POST `/messages/unpin/{groupId}`
-Unpin a message in a group (requires auth, admin).
+Unpin a message in a group.
 
 **Body:**
 ```json
@@ -717,7 +717,7 @@ Create a bot.
 **Status:** 201 on success, 400 on error
 
 #### PUT `/bots/{botId}/commands`
-Update bot commands (requires auth, creator).
+Update bot commands.
 
 **Body:**
 ```json
@@ -739,7 +739,7 @@ Update bot commands (requires auth, creator).
 **Status:** 200 on success, 400 on error
 
 #### PUT `/bots/{botId}/webhook`
-Set or clear bot webhook (requires auth, creator).
+Set or clear bot webhook.
 
 **Body:**
 ```json
@@ -870,6 +870,7 @@ CampChat is poised for significant enhancements to make it a next-generation mes
 
 ### Core Improvements
 
+- **Complete Docs**: Design the complete documentation pages for using the project and showing some examples.
 - **Max Connections**: Implement limits on concurrent webhook connections per bot to optimize performance and prevent abuse, with configurable settings for bot creators.
 - **Enhanced Chat Engine Security**: Strengthen encryption with quantum-resistant algorithms, add message integrity checks, and implement secure key rotation for users and groups.
 - **Polls and Quizzes**: Support interactive message types for polls (single/multiple choice) and quizzes with correct answers, stored in the messages collection and rendered in clients.
